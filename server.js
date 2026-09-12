@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const admin = require('firebase-admin');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
@@ -10,8 +11,16 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Initialize Firebase Admin SDK
-const serviceAccount = require('./serviceAccountKey.json');
+// Check local folder first, then fall back to Render's secure secrets folder
+let serviceAccount;
+if (fs.existsSync('./serviceAccountKey.json')) {
+    serviceAccount = require('./serviceAccountKey.json');
+} else if (fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
+    serviceAccount = require('/etc/secrets/serviceAccountKey.json');
+} else {
+    console.error('Error: serviceAccountKey.json not found!');
+}
+
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
 });
@@ -48,7 +57,9 @@ app.get('/api/videos', async (req, res) => {
     try {
         const snapshot = await db.collection('videos').orderBy('id', 'desc').get();
         const videos = [];
-        snapshot.forEach(doc => videos.push(doc.data()));
+        snapshot.forEach(doc => {
+            if (doc.data()) videos.push(doc.data());
+        });
         res.json(videos);
     } catch (err) {
         console.error('Error fetching videos:', err);
