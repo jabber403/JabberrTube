@@ -1,5 +1,5 @@
 const express = require('express');
-const mongoose = require('mongoose');
+const admin = require('firebase-admin');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -10,48 +10,13 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Connect to MongoDB Atlas with timeout protection for cloud deployment
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://stupidnoobplays905_db_user:2Nc6NwNaBugmHhfv@jabbertube-data.ndozr3q.mongodb.net/jabberrtube?retryWrites=true&w=majority';
-
-mongoose.connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 10000 // Prevents indefinite hanging if IP is blocked
-})
-.then(() => console.log('Connected to MongoDB Atlas successfully!'))
-.catch(err => console.error('MongoDB connection error:', err));
-
-// Schemas & Models
-const userSchema = new mongoose.Schema({
-    username: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
-    bio: { type: String, default: 'Welcome to my JabberrTube channel!' },
-    avatarUrl: { type: String, default: '' },
-    bannerUrl: { type: String, default: '' },
-    subscribersCount: { type: Number, default: 0 },
-    subscriptions: [String]
+// Initialize Firebase Admin SDK
+const serviceAccount = require('./serviceAccountKey.json');
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
 });
-const User = mongoose.model('User', userSchema);
-
-const commentSchema = new mongoose.Schema({
-    id: Number,
-    username: String,
-    text: String,
-    likes: [String],
-    dislikes: [String]
-});
-
-const videoSchema = new mongoose.Schema({
-    id: { type: Number, unique: true },
-    title: String,
-    description: String,
-    hashtags: String,
-    uploader: String,
-    videoUrl: String,
-    thumbnailUrl: String,
-    likes: [String],
-    dislikes: [String],
-    comments: [commentSchema]
-});
-const Video = mongoose.model('Video', videoSchema);
+const db = admin.firestore();
+console.log('Connected to Firebase Firestore successfully!');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -77,11 +42,13 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- API ENDPOINTS ---
+// --- API ENDPOINTS (Firestore) ---
 
 app.get('/api/videos', async (req, res) => {
     try {
-        const videos = await Video.find().sort({ id: -1 });
+        const snapshot = await db.collection('videos').orderBy('id', 'desc').get();
+        const videos = [];
+        snapshot.forEach(doc => videos.push(doc.data()));
         res.json(videos);
     } catch (err) {
         console.error('Error fetching videos:', err);
@@ -96,12 +63,23 @@ app.post('/api/signup', async (req, res) => {
             return res.json({ error: 'Username and password are required.' });
         }
         
-        const existing = await User.findOne({ username });
-        if (existing) {
+        // Check if username already exists
+        const userQuery = await db.collection('users').where('username', '==', username).get();
+        if (!userQuery.empty) {
             return res.json({ error: 'Username already taken.' });
         }
 
-        await User.create({ username, password });
+        // Save new user
+        await db.collection('users').add({
+            username,
+            password,
+            bio: 'Welcome to my JabberrTube channel!',
+            avatarUrl: '',
+            bannerUrl: '',
+            subscribersCount: 0,
+            subscriptions: []
+        });
+        
         res.json({ success: true });
     } catch (err) {
         console.error('Signup error:', err);
@@ -112,11 +90,16 @@ app.post('/api/signup', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await User.findOne({ username, password });
-        if (!user) {
+        const userQuery = await db.collection('users')
+            .where('username', '==', username)
+            .where('password', '==', password)
+            .get();
+
+        if (userQuery.empty) {
             return res.json({ error: 'Invalid username or password.' });
         }
-        res.json({ success: true, username: user.username });
+
+        res.json({ success: true, username });
     } catch (err) {
         console.error('Login error:', err);
         res.status(500).json({ error: err.message });
