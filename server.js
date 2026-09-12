@@ -1,5 +1,4 @@
 const express = require('express');
-const fs = require('fs');
 const admin = require('firebase-admin');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
@@ -11,33 +10,28 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Check local folder first, then Render's secure secrets folder with debugging
-let serviceAccount;
+// Initialize Firebase Admin using the Render Environment Variable or local fallback
 try {
-    if (fs.existsSync('./serviceAccountKey.json')) {
-        serviceAccount = require('./serviceAccountKey.json');
-        console.log('Loaded serviceAccountKey from local folder.');
-    } else if (fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
-        serviceAccount = require('/etc/secrets/serviceAccountKey.json');
-        console.log('Loaded serviceAccountKey from /etc/secrets/');
+    let serviceAccount;
+    if (process.env.FIREBASE_CONFIG) {
+        // Parse the environment variable string for Render
+        serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
+        console.log('Loaded serviceAccountKey from FIREBASE_CONFIG env variable.');
     } else {
-        // Print files in /etc/secrets if it exists to debug filename mismatches
-        if (fs.existsSync('/etc/secrets')) {
-            console.log('Files found in /etc/secrets:', fs.readdirSync('/etc/secrets'));
-        } else {
-            console.log('/etc/secrets directory does not exist.');
-        }
-        throw new Error('serviceAccountKey.json file not found anywhere!');
+        // Fallback for local testing if file exists
+        serviceAccount = require('./serviceAccountKey.json');
+        console.log('Loaded serviceAccountKey from local file.');
     }
+
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+    console.log('Connected to Firebase Firestore successfully!');
 } catch (err) {
     console.error('Critical Firebase Auth Error:', err.message);
 }
 
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-});
 const db = admin.firestore();
-console.log('Connected to Firebase Firestore successfully!');
 
 // Configure Cloudinary
 cloudinary.config({
