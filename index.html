@@ -61,7 +61,7 @@
         .sidebarThumbCard { display: flex; gap: 10px; margin-bottom: 10px; cursor: pointer; border: 1px solid #eee; padding: 5px; background: #fafafa; }
         .sidebarThumbCard:hover { background: #f0f0f0; }
 
-        /* Channel Profile Styles with custom image banner/avatar support */
+        /* Channel Profile Styles */
         .channel-banner { width: 100%; height: 140px; background: linear-gradient(135deg, #cc0000, #ff4d4d); background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-bottom: 15px; border: 1px solid #999; }
         .channel-header-info { display: flex; gap: 20px; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
         .channel-avatar { width: 80px; height: 80px; background: #333; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; border: 2px solid #999; background-size: cover; background-position: center; flex-shrink: 0; overflow: hidden; }
@@ -98,14 +98,14 @@
     </div>
 
     <div id="searchDiv">
-        <input type="text" placeholder="Search videos..." style="width: 300px;">
-        <input type="button" value="Search">
+        <input type="text" id="searchInput" placeholder="Search videos..." style="width: 300px;">
+        <input type="button" value="Search" onclick="performSearch()">
     </div>
 
     <!-- HOME VIEW -->
     <div id="homeView">
         <div class="hpBlockHeading">
-            <span>Promoted Videos</span>
+            <span id="homeGridHeading">Promoted Videos</span>
             <button onclick="openModal('uploadDialog')" id="uploadBtn" style="display:none;">Upload Video</button>
         </div>
         <div id="videoContainer" class="videoGrid">
@@ -128,7 +128,7 @@
             </div>
         </div>
 
-        <!-- Edit Profile Customizations (Only visible to owner) -->
+        <!-- Edit Profile Customizations -->
         <div style="margin-bottom: 20px; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; display:none;" id="editBioSection">
             <h3 style="margin:0 0 10px 0; font-size:14px;">Customize Your Channel</h3>
             <label style="font-size: 11px; font-weight: bold;">Bio:</label><br>
@@ -250,7 +250,7 @@
             .then(res => res.json())
             .then(videos => {
                 allVideos = videos;
-                renderHomeGrid();
+                renderHomeGrid(allVideos);
                 if (activeVideoId !== null) {
                     const currentVid = allVideos.find(v => v.id === activeVideoId);
                     if (currentVid) updateWatchView(currentVid);
@@ -264,14 +264,14 @@
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
-    function renderHomeGrid() {
+    function renderHomeGrid(videosToRender) {
         const container = document.getElementById('videoContainer');
         container.innerHTML = '';
-        if (allVideos.length === 0) {
-            container.innerHTML = '<p>No videos posted yet.</p>';
+        if (videosToRender.length === 0) {
+            container.innerHTML = '<p>No videos found.</p>';
             return;
         }
-        allVideos.forEach(vid => {
+        videosToRender.forEach(vid => {
             const thumbMarkup = vid.thumbnailUrl 
                 ? `<img src="${vid.thumbnailUrl}" alt="Thumbnail">`
                 : `<video src="${vid.videoUrl}" preload="metadata"></video>`;
@@ -292,6 +292,33 @@
             `;
         });
     }
+
+    function performSearch() {
+        const query = document.getElementById('searchInput').value.toLowerCase().trim();
+        showHome();
+        
+        if (!query) {
+            document.getElementById('homeGridHeading').innerText = 'Promoted Videos';
+            renderHomeGrid(allVideos);
+            return;
+        }
+
+        const filtered = allVideos.filter(vid => 
+            vid.title.toLowerCase().includes(query) ||
+            (vid.description && vid.description.toLowerCase().includes(query)) ||
+            vid.uploader.toLowerCase().includes(query) ||
+            (vid.hashtags && vid.hashtags.toLowerCase().includes(query))
+        );
+
+        document.getElementById('homeGridHeading').innerText = `Search Results for "${query}"`;
+        renderHomeGrid(filtered);
+    }
+
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            performSearch();
+        }
+    });
 
     const mainVid = document.getElementById('mainWatchVideo');
     mainVid.addEventListener('timeupdate', () => {
@@ -337,7 +364,9 @@
         activeVideoId = null;
         hideAllViews();
         document.getElementById('homeView').style.display = 'block';
-        fetchVideos();
+        document.getElementById('homeGridHeading').innerText = 'Promoted Videos';
+        document.getElementById('searchInput').value = '';
+        renderHomeGrid(allVideos);
     }
 
     function openWatchMode(videoId) {
