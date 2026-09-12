@@ -1,5 +1,6 @@
 const express = require('express');
-const admin = require('firebase-admin');
+const fs = require('fs');
+const { google } = require('googleapis');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
@@ -10,29 +11,86 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Initialize Firebase Admin safely with environment variable parsing
-try {
-    let serviceAccount;
-    if (process.env.FIREBASE_CONFIG) {
-        // Clean up any formatting issues from Render's UI paste
-        let rawConfig = process.env.FIREBASE_CONFIG.trim();
-        serviceAccount = JSON.parse(rawConfig);
-        console.log('Successfully parsed FIREBASE_CONFIG env variable.');
-    } else {
-        serviceAccount = require('./serviceAccountKey.json');
-        console.log('Loaded serviceAccountKey from local file.');
-    }
+// Google Drive & Auth Setup using serviceAccountKey.json
+const FOLDER_ID = '1wIldP7boHM_n2-ixjyklTZaGxsjVpgja';
 
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+let auth;
+if (fs.existsSync('./serviceAccountKey.json')) {
+    auth = new google.auth.GoogleAuth({
+        keyFile: './serviceAccountKey.json',
+        scopes: ['https://www.googleapis.com/auth/drive']
     });
-    console.log('Connected to Firebase Firestore successfully!');
-} catch (err) {
-    console.error('Critical Firebase Auth Error:', err.message);
-    process.exit(1);
+} else {
+    // Fallback if key is provided via environment variables if needed later
+    auth = new google.auth.GoogleAuth({
+        credentials: JSON.parse(process.env.FIREBASE_CONFIG || '{}'),
+        scopes: ['https://www.googleapis.com/auth/drive']
+    });
 }
 
-const db = admin.firestore();
+const drive = google.drive({ version: 'v3', auth });
+console.log('Connected to Google Drive API successfully!');
+
+// Helper function to read/create a JSON data file from Google Drive folder
+async function getDriveData(fileName) {
+    try {
+        const res = await drive.files.list({
+            q: `'${FOLDER_ID}' in parents and name='${fileName}' and trashed=false`,
+            fields: 'files(id, name)',
+        });
+        
+        if (res.data.files.length > 0) {
+            const fileId = res.data.files[0].id;
+            const fileContent = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'json' });
+            return fileContent.data || [];
+        } else {
+            // File doesn't exist yet, create an empty one
+            await saveDriveData(fileName, []);
+            return [];
+        }
+    } catch (err) {
+        console.error(`Error reading ${fileName} from Drive:`, err.message);
+        return [];
+    }
+}
+
+// Helper function to save JSON data to Google Drive folder
+async function saveDriveData(fileName, data) {
+    try {
+        const res = await drive.files.list({
+            q: `'${FOLDER_ID}' in parents and name='${fileName}' and trashed=false`,
+            fields: 'files(id, name)',
+        });
+
+        const fileBuffer = Buffer.from(JSON.stringify(data, null, 2));
+        const media = {
+            mimeType: 'application/json',
+            body: fileBuffer,
+        };
+
+        if (res.data.files.length > 0) {
+            // Update existing file
+            const fileId = res.data.files[0].id;
+            await drive.files.update({
+                fileId: fileId,
+                media: media,
+            });
+        } else {
+            // Create new file
+            const fileMetadata = {
+                name: fileName,
+                parents: [FOLDER_ID],
+            };
+            await drive.files.create({
+                resource: fileMetadata,
+                media: media,
+                fields: 'id',
+            });
+        }
+    } catch (err) {
+        console.error(`Error saving ${fileName} to Drive:`, err.message);
+    }
+}
 
 // Configure Cloudinary
 cloudinary.config({
@@ -58,15 +116,11 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- API ENDPOINTS (Firestore) ---
+// --- API ENDPOINTS (Google Drive JSON Storage) ---
 
 app.get('/api/videos', async (req, res) => {
     try {
-        const snapshot = await db.collection('videos').orderBy('id', 'desc').get();
-        const videos = [];
-        snapshot.forEach(doc => {
-            if (doc.data()) videos.push(doc.data());
-        });
+        const videos = await getDriveData('videos.json');
         res.json(videos);
     } catch (err) {
         console.error('Error fetching videos:', err);
@@ -81,14 +135,13 @@ app.post('/api/signup', async (req, res) => {
             return res.json({ error: 'Username and password are required.' });
         }
         
-        // Check if username already exists
-        const userQuery = await db.collection('users').where('username', '==', username).get();
-        if (!userQuery.empty) {
+        const users = await getDriveData('users.json');
+        const existingUser = users.find(u => u.username === username);
+        if (existingUser) {
             return res.json({ error: 'Username already taken.' });
         }
 
-        // Save new user
-        await db.collection('users').add({
+        users.push({
             username,
             password,
             bio: 'Welcome to my JabberrTube channel!',
@@ -97,7 +150,8 @@ app.post('/api/signup', async (req, res) => {
             subscribersCount: 0,
             subscriptions: []
         });
-        
+
+        await saveDriveData('users.json', users);
         res.json({ success: true });
     } catch (err) {
         console.error('Signup error:', err);
@@ -108,12 +162,10 @@ app.post('/api/signup', async (req, res) => {
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const userQuery = await db.collection('users')
-            .where('username', '==', username)
-            .where('password', '==', password)
-            .get();
-
-        if (userQuery.empty) {
+        const users = await getDriveData('users.json');
+        
+        const user = users.find(u => u.username === username && u.password === password);
+        if (!user) {
             return res.json({ error: 'Invalid username or password.' });
         }
 
