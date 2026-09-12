@@ -1,94 +1,47 @@
 const express = require('express');
 const fs = require('fs');
-const { google } = require('googleapis');
+const path = require('path');
 const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const path = require('path');
 const cors = require('cors');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Google Drive & Auth Setup using serviceAccountKey.json
-const FOLDER_ID = '1wIldP7boHM_n2-ixjyklTZaGxsjVpgja';
+// Local file paths
+const USERS_FILE = path.join(__dirname, 'users.json');
+const VIDEOS_FILE = path.join(__dirname, 'videos.json');
 
-let auth;
-if (fs.existsSync('./serviceAccountKey.json')) {
-    auth = new google.auth.GoogleAuth({
-        keyFile: './serviceAccountKey.json',
-        scopes: ['https://www.googleapis.com/auth/drive']
-    });
-} else {
-    auth = new google.auth.GoogleAuth({
-        credentials: JSON.parse(process.env.FIREBASE_CONFIG || '{}'),
-        scopes: ['https://www.googleapis.com/auth/drive']
-    });
-}
-
-const drive = google.drive({ version: 'v3', auth });
-console.log('Connected to Google Drive API successfully!');
-
-// Helper function to read/create a JSON data file from Google Drive folder
-async function getDriveData(fileName) {
+// Helper to read local JSON
+function readLocalData(filePath) {
     try {
-        const res = await drive.files.list({
-            q: `'${FOLDER_ID}' in parents and name='${fileName}' and trashed=false`,
-            fields: 'files(id, name)',
-        });
-        
-        if (res.data.files.length > 0) {
-            const fileId = res.data.files[0].id;
-            const fileContent = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'json' });
-            return fileContent.data || [];
-        } else {
-            await saveDriveData(fileName, []);
+        if (!fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, JSON.stringify([], null, 2));
             return [];
         }
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
     } catch (err) {
-        console.error(`Error reading ${fileName} from Drive:`, err.message);
+        console.error(`Error reading ${filePath}:`, err.message);
         return [];
     }
 }
 
-// Helper function to save JSON data to Google Drive folder
-async function saveDriveData(fileName, data) {
+// Helper to save local JSON
+function saveLocalData(filePath, data) {
     try {
-        const res = await drive.files.list({
-            q: `'${FOLDER_ID}' in parents and name='${fileName}' and trashed=false`,
-            fields: 'files(id, name)',
-        });
-
-        const fileBuffer = Buffer.from(JSON.stringify(data, null, 2));
-        const media = {
-            mimeType: 'application/json',
-            body: fileBuffer,
-        };
-
-        if (res.data.files.length > 0) {
-            const fileId = res.data.files[0].id;
-            await drive.files.update({
-                fileId: fileId,
-                media: media,
-            });
-            console.log(`Successfully updated ${fileName} in Google Drive.`);
-        } else {
-            const fileMetadata = {
-                name: fileName,
-                parents: [FOLDER_ID],
-            };
-            await drive.files.create({
-                resource: fileMetadata,
-                media: media,
-                fields: 'id',
-            });
-            console.log(`Successfully created ${fileName} in Google Drive.`);
-        }
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
     } catch (err) {
-        console.error(`CRITICAL DRIVE SAVE ERROR for ${fileName}:`, err.message);
+        console.error(`Error saving ${filePath}:`, err.message);
     }
 }
+
+// Ensure files exist on startup
+readLocalData(USERS_FILE);
+readLocalData(VIDEOS_FILE);
+console.log('Using local JSON storage successfully!');
 
 // Configure Cloudinary
 cloudinary.config({
@@ -116,31 +69,30 @@ app.get('/', (req, res) => {
 
 // --- API ENDPOINTS ---
 
-app.get('/api/videos', async (req, res) => {
+app.get('/api/videos', (req, res) => {
     try {
-        const videos = await getDriveData('videos.json');
+        const videos = readLocalData(VIDEOS_FILE);
         res.json(videos);
     } catch (err) {
-        console.error('Error fetching videos:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/signup', async (req, res) => {
+app.post('/api/signup', (req, res) => {
     try {
         const { username, password } = req.body;
         if (!username || !password) {
             return res.json({ error: 'Username and password are required.' });
         }
         
-        const users = await getDriveData('users.json');
-        const existingUser = users.find(u => u.username === username);
+        const users = readLocalData(USERS_FILE);
+        const existingUser = users.find(u => u.username.trim() === username.trim());
         if (existingUser) {
             return res.json({ error: 'Username already taken.' });
         }
 
         users.push({
-            username,
+            username: username.trim(),
             password,
             bio: 'Welcome to my JabberrTube channel!',
             avatarUrl: '',
@@ -149,27 +101,25 @@ app.post('/api/signup', async (req, res) => {
             subscriptions: []
         });
 
-        await saveDriveData('users.json', users);
+        saveLocalData(USERS_FILE, users);
         res.json({ success: true });
     } catch (err) {
-        console.error('Signup error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', (req, res) => {
     try {
         const { username, password } = req.body;
-        const users = await getDriveData('users.json');
+        const users = readLocalData(USERS_FILE);
         
-        const user = users.find(u => u.username === username && u.password === password);
+        const user = users.find(u => u.username.trim() === username.trim() && u.password === password);
         if (!user) {
             return res.json({ error: 'Invalid username or password.' });
         }
 
-        res.json({ success: true, username });
+        res.json({ success: true, username: user.username });
     } catch (err) {
-        console.error('Login error:', err);
         res.status(500).json({ error: err.message });
     }
 });
