@@ -11,14 +11,26 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Check local folder first, then fall back to Render's secure secrets folder
+// Check local folder first, then Render's secure secrets folder with debugging
 let serviceAccount;
-if (fs.existsSync('./serviceAccountKey.json')) {
-    serviceAccount = require('./serviceAccountKey.json');
-} else if (fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
-    serviceAccount = require('/etc/secrets/serviceAccountKey.json');
-} else {
-    console.error('Error: serviceAccountKey.json not found!');
+try {
+    if (fs.existsSync('./serviceAccountKey.json')) {
+        serviceAccount = require('./serviceAccountKey.json');
+        console.log('Loaded serviceAccountKey from local folder.');
+    } else if (fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
+        serviceAccount = require('/etc/secrets/serviceAccountKey.json');
+        console.log('Loaded serviceAccountKey from /etc/secrets/');
+    } else {
+        // Print files in /etc/secrets if it exists to debug filename mismatches
+        if (fs.existsSync('/etc/secrets')) {
+            console.log('Files found in /etc/secrets:', fs.readdirSync('/etc/secrets'));
+        } else {
+            console.log('/etc/secrets directory does not exist.');
+        }
+        throw new Error('serviceAccountKey.json file not found anywhere!');
+    }
+} catch (err) {
+    console.error('Critical Firebase Auth Error:', err.message);
 }
 
 admin.initializeApp({
