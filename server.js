@@ -16,7 +16,7 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// User Schema & Model
+// Schemas & Models
 const userSchema = new mongoose.Schema({
     username: { type: String, unique: true, required: true },
     password: { type: String, required: true },
@@ -28,7 +28,6 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// Video Schema & Model (with comments/likes)
 const commentSchema = new mongoose.Schema({
     id: Number,
     username: String,
@@ -70,14 +69,23 @@ const storage = new CloudinaryStorage({
 });
 const upload = multer({ storage: storage });
 
-// Serve frontend HTML file
+// Serve Frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- AUTH API ENDPOINTS ---
+// --- API ENDPOINTS ---
 
-// User Sign Up
+app.get('/api/videos', async (req, res) => {
+    try {
+        const videos = await Video.find().sort({ id: -1 });
+        res.json(videos);
+    } catch (err) {
+        console.error('Error fetching videos:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/signup', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -93,11 +101,11 @@ app.post('/api/signup', async (req, res) => {
         await User.create({ username, password });
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: 'Server error during signup.' });
+        console.error('Signup error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
-// User Log In
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -107,17 +115,8 @@ app.post('/api/login', async (req, res) => {
         }
         res.json({ success: true, username: user.username });
     } catch (err) {
-        res.status(500).json({ error: 'Server error during login.' });
-    }
-});
-
-// Get all videos
-app.get('/api/videos', async (req, res) => {
-    try {
-        const videos = await Video.find().sort({ id: -1 });
-        res.json(videos);
-    } catch (err) {
-        res.status(500).json({ error: 'Server error' });
+        console.error('Login error:', err);
+        res.status(500).json({ error: err.message });
     }
 });
 
