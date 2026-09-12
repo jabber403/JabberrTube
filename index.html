@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>JabberrTube - Broadcast Yourself.</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 10px; background: #fff; color: #000; }
+        #baseDiv { width: 950px; margin: 0 auto; }
+        #logoTagDiv { float: left; margin-bottom: 10px; }
+        #utilDiv { float: right; font-size: 12px; margin-top: 10px; }
+        .clear { clear: both; }
+        #gNavDiv { background-color: #ccc; padding: 5px; border-top: 1px solid #999; border-bottom: 1px solid #999; margin-bottom: 10px; }
+        .tab { display: inline-block; margin-right: 15px; font-weight: bold; }
+        .tab a { text-decoration: none; color: #0033cc; }
+        #searchDiv { margin-bottom: 15px; background: #E5ECF9; padding: 10px; text-align: center; border: 1px solid #3366CC; }
+        .hpBlockHeading { font-weight: bold; font-size: 14px; background: #e6e6e6; padding: 4px; border-bottom: 1px solid #ccc; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .videoGrid { display: flex; flex-direction: column; gap: 15px; }
+        .videoCard { display: flex; border: 1px solid #ddd; padding: 10px; background: #f9f9f9; gap: 15px; cursor: pointer; }
+        .videoCard:hover { background: #f0f4f8; }
+        
+        /* Video Container / Thumbnail Wrappers */
+        .custom-video-wrapper { position: relative; width: 160px; height: 120px; background: #000; border: 1px solid #999; flex-shrink: 0; overflow: hidden; }
+        .custom-video-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+        .custom-video-wrapper video { width: 100%; height: 100%; object-fit: cover; display: none; }
+
+        .watch-video-wrapper { position: relative; width: 100%; max-height: 480px; background: #000; border: 1px solid #999; }
+        .watch-video-wrapper video { width: 100%; height: 100%; max-height: 480px; display: block; object-fit: contain; }
+
+        .watch-video-wrapper:fullscreen {
+            display: flex; align-items: center; justify-content: center;
+            background: #000; width: 100vw; height: 100vh; max-height: none;
+        }
+        .watch-video-wrapper:fullscreen video { max-height: 100vh; width: 100%; height: 100%; object-fit: contain; }
+
+        /* Custom YouTube-style Control Bar */
+        .video-controls-bar {
+            position: absolute; bottom: 0; left: 0; right: 0;
+            background: rgba(28, 28, 28, 0.85); display: flex; flex-direction: column;
+            padding: 4px 8px; box-sizing: border-box; opacity: 0; transition: opacity 0.3s ease;
+        }
+        .custom-video-wrapper:hover .video-controls-bar,
+        .watch-video-wrapper:hover .video-controls-bar { opacity: 1; }
+
+        .progress-bar-container { width: 100%; height: 5px; background: rgba(255, 255, 255, 0.3); cursor: pointer; position: relative; margin-bottom: 4px; }
+        .progress-bar-filled { height: 100%; background: #ff0000; width: 0%; }
+
+        .controls-row { display: flex; align-items: center; justify-content: space-between; color: #fff; font-size: 11px; }
+        .controls-left, .controls-right { display: flex; align-items: center; gap: 8px; }
+        .control-btn { background: none; border: none; color: #fff; cursor: pointer; font-size: 12px; padding: 0; }
+        .control-btn:hover { color: #ff0000; }
+
+        .videoInfo { flex-grow: 1; font-size: 12px; }
+        .videoTitle { font-weight: bold; font-size: 14px; color: #0033cc; margin-bottom: 5px; }
+
+        #watchContainer { display: flex; gap: 20px; }
+        #watchLeft { flex: 1; }
+        #watchRight { width: 300px; }
+        .watchTitle { font-size: 18px; font-weight: bold; margin: 10px 0 5px 0; }
+        .watchPanel { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; margin-bottom: 10px; font-size: 12px; }
+        .sidebarThumbCard { display: flex; gap: 10px; margin-bottom: 10px; cursor: pointer; border: 1px solid #eee; padding: 5px; background: #fafafa; }
+        .sidebarThumbCard:hover { background: #f0f0f0; }
+
+        /* Channel Profile Styles with custom image banner/avatar support */
+        .channel-banner { width: 100%; height: 140px; background: linear-gradient(135deg, #cc0000, #ff4d4d); background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); margin-bottom: 15px; border: 1px solid #999; }
+        .channel-header-info { display: flex; gap: 20px; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
+        .channel-avatar { width: 80px; height: 80px; background: #333; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; border: 2px solid #999; background-size: cover; background-position: center; flex-shrink: 0; overflow: hidden; }
+        .channel-details h2 { margin: 0 0 5px 0; font-size: 22px; }
+        .channel-stats { font-size: 12px; color: #555; margin-bottom: 8px; }
+        .channel-bio { font-size: 12px; font-style: italic; color: #333; margin-bottom: 8px; }
+
+        .comment-section { margin-top: 20px; font-size: 12px; }
+        .comment-box { border: 1px solid #ccc; background: #f9f9f9; padding: 10px; margin-bottom: 10px; }
+        .reply-box { margin-left: 20px; border-left: 2px solid #0033cc; padding-left: 10px; margin-top: 8px; background: #fff; }
+
+        .modal { display: none; position: fixed; top: 15%; left: 50%; transform: translate(-50%, -15%); width: 380px; background: #fff; border: 2px solid #999; padding: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; max-height: 80vh; overflow-y: auto; }
+        button { cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="baseDiv">
+    <div id="logoTagDiv">
+        <h1 style="margin:0; color:#c00; cursor:pointer;" onclick="showHome()">JabberrTube</h1>
+    </div>
+
+    <div id="utilDiv">
+        <span id="userStatus">
+            <b><a href="#" onclick="openModal('authDialog', 'signup'); return false;">Sign Up</a></b> | 
+            <a href="#" onclick="openModal('authDialog', 'login'); return false;">Log In</a>
+        </span>
+    </div>
+    <div class="clear"></div>
+
+    <div id="gNavDiv">
+        <div class="tab"><a href="#" onclick="showHome()">Home</a></div>
+        <div class="tab" id="profileTab" style="display:none;"><a href="#" onclick="openProfile()">My Channel</a></div>
+    </div>
+
+    <div id="searchDiv">
+        <input type="text" placeholder="Search videos..." style="width: 300px;">
+        <input type="button" value="Search">
+    </div>
+
+    <!-- HOME VIEW -->
+    <div id="homeView">
+        <div class="hpBlockHeading">
+            <span>Promoted Videos</span>
+            <button onclick="openModal('uploadDialog')" id="uploadBtn" style="display:none;">Upload Video</button>
+        </div>
+        <div id="videoContainer" class="videoGrid">
+            Loading videos...
+        </div>
+    </div>
+
+    <!-- CHANNEL PROFILE VIEW -->
+    <div id="profileView" style="display:none;">
+        <div class="channel-banner" id="channelBannerDiv">Channel Banner</div>
+        <div class="channel-header-info">
+            <div class="channel-avatar" id="channelAvatarDiv">U</div>
+            <div class="channel-details">
+                <h2 id="profUsernameTitle">Username</h2>
+                <div class="channel-stats">
+                    <span id="profSubCount">0 subscribers</span> • <span id="profVideoCount">0 videos</span>
+                </div>
+                <div class="channel-bio" id="profBioDisplay">No bio provided.</div>
+                <div id="profileActionButton" style="margin-top: 5px;"></div>
+            </div>
+        </div>
+
+        <!-- Edit Profile Customizations (Only visible to owner) -->
+        <div style="margin-bottom: 20px; background: #f4f4f4; padding: 10px; border: 1px solid #ccc; display:none;" id="editBioSection">
+            <h3 style="margin:0 0 10px 0; font-size:14px;">Customize Your Channel</h3>
+            <label style="font-size: 11px; font-weight: bold;">Bio:</label><br>
+            <textarea id="profBioInput" style="width:100%; height:40px; font-size:12px; margin-top:3px;"></textarea><br><br>
+            <label style="font-size: 11px; font-weight: bold;">Profile Picture (Avatar):</label><br>
+            <input type="file" id="profAvatarInput" accept="image/*" style="font-size:11px; margin-top:3px;"><br><br>
+            <label style="font-size: 11px; font-weight: bold;">Channel Banner Image:</label><br>
+            <input type="file" id="profBannerInput" accept="image/*" style="font-size:11px; margin-top:3px;"><br><br>
+            <button onclick="saveProfile()" style="padding: 5px 10px; font-weight: bold;">Save Changes</button>
+        </div>
+
+        <div class="hpBlockHeading" style="margin-top: 20px;">Uploaded Videos</div>
+        <div id="channelVideosContainer" class="videoGrid"></div>
+    </div>
+
+    <!-- WATCH VIEW -->
+    <div id="watchView" style="display:none;">
+        <div id="watchContainer">
+            <div id="watchLeft">
+                <div class="watch-video-wrapper" id="mainVideoWrapper">
+                    <video id="mainWatchVideo" src=""></video>
+                    <div class="video-controls-bar">
+                        <div class="progress-bar-container" id="mainProgressContainer" onclick="seekVideo(event, 'mainWatchVideo')">
+                            <div class="progress-bar-filled" id="mainProgressFilled"></div>
+                        </div>
+                        <div class="controls-row">
+                            <div class="controls-left">
+                                <button class="control-btn" id="mainPlayBtn" onclick="togglePlay('mainWatchVideo', 'mainPlayBtn')">❚❚</button>
+                                <button class="control-btn" onclick="toggleMute('mainWatchVideo')">🔊</button>
+                                <span id="mainTimeDisplay">0:00 / 0:00</span>
+                            </div>
+                            <div class="controls-right">
+                                <button class="control-btn" onclick="toggleFullscreen('mainVideoWrapper')">⛶</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="watchVideoTitle" class="watchTitle"></div>
+                
+                <div class="watchPanel">
+                    <div>
+                        <b>By:</b> <a href="#" id="watchUploaderLink" onclick="viewProfile(window.currentWatchUploader)"></a>
+                        <span id="watchSubContainer" style="margin-left: 10px;"></span>
+                    </div>
+                    <div>
+                        <button id="watchLikeBtn" onclick="reactVideo('like')">👍</button> <span id="watchLikeCount">0</span>
+                        <button id="watchDislikeBtn" onclick="reactVideo('dislike')">👎</button> <span id="watchDislikeCount">0</span>
+                        <button onclick="shareVideo()" style="margin-left: 10px;">🔗 Share</button>
+                    </div>
+                </div>
+
+                <div style="background: #f1f1f1; padding: 10px; font-size: 12px; border: 1px solid #ddd;">
+                    <p style="margin:0 0 5px 0;"><b>Description:</b></p>
+                    <div id="watchDescription" style="white-space: pre-wrap; margin-bottom: 10px;"></div>
+                    <div id="watchHashtags" style="color: #0033cc; font-weight: bold;"></div>
+                </div>
+
+                <!-- Comments Section -->
+                <div class="comment-section">
+                    <h3>Comments</h3>
+                    <div id="commentInputArea" style="margin-bottom: 15px;">
+                        <textarea id="newCommentText" placeholder="Add a comment..." style="width:100%; height:50px;"></textarea><br>
+                        <button onclick="postComment()">Post Comment</button>
+                    </div>
+                    <div id="commentsList"></div>
+                </div>
+            </div>
+
+            <div id="watchRight">
+                <div class="hpBlockHeading">Related Videos</div>
+                <div id="relatedVideosContainer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="authDialog" class="modal">
+    <h3 id="authTitle" style="margin-top:0;">Log In</h3>
+    <form id="authForm">
+        <label>Username:</label><br>
+        <input type="text" id="authUsername" required style="width:95%;"><br><br>
+        <label>Password:</label><br>
+        <input type="password" id="authPassword" required style="width:95%;"><br><br>
+        <button type="submit" id="authSubmitBtn">Submit</button>
+        <button type="button" onclick="closeModal('authDialog')">Cancel</button>
+        <div id="authError" style="color:red; font-size:12px; margin-top:10px;"></div>
+    </form>
+</div>
+
+<div id="uploadDialog" class="modal">
+    <h3 style="margin-top:0;">Upload Video</h3>
+    <form id="uploadForm">
+        <label>Title:</label><br>
+        <input type="text" id="videoTitleInput" required style="width:95%;"><br><br>
+        <label>Description:</label><br>
+        <textarea id="videoDescInput" style="width:95%; height:40px;"></textarea><br><br>
+        <label>Hashtags:</label><br>
+        <input type="text" id="videoTagsInput" style="width:95%;"><br><br>
+        <label>Video File (.mp4):</label><br>
+        <input type="file" id="videoFileInput" accept="video/mp4" required style="font-size:11px;"><br><br>
+        <label>Custom Thumbnail Image (Optional):</label><br>
+        <input type="file" id="thumbnailFileInput" accept="image/*" style="font-size:11px;"><br><br>
+        <button type="submit" id="uploadSubmitBtn">Post Video</button>
+        <button type="button" onclick="closeModal('uploadDialog')">Cancel</button>
+        <div id="uploadStatus" style="font-size:12px; margin-top:10px;"></div>
+    </form>
+</div>
+
+<script>
+    let currentUser = null;
+    let userSubscriptions = [];
+    let allVideos = [];
+    let activeVideoId = null;
+
+    function fetchVideos() {
+        fetch('/api/videos')
+            .then(res => res.json())
+            .then(videos => {
+                allVideos = videos;
+                renderHomeGrid();
+                if (activeVideoId !== null) {
+                    const currentVid = allVideos.find(v => v.id === activeVideoId);
+                    if (currentVid) updateWatchView(currentVid);
+                }
+            });
+    }
+
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.floor(seconds % 60);
+        return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function renderHomeGrid() {
+        const container = document.getElementById('videoContainer');
+        container.innerHTML = '';
+        if (allVideos.length === 0) {
+            container.innerHTML = '<p>No videos posted yet.</p>';
+            return;
+        }
+        allVideos.forEach(vid => {
+            const thumbMarkup = vid.thumbnailUrl 
+                ? `<img src="${vid.thumbnailUrl}" alt="Thumbnail">`
+                : `<video src="${vid.videoUrl}" preload="metadata"></video>`;
+
+            container.innerHTML += `
+                <div class="videoCard" onclick="openWatchMode(${vid.id})">
+                    <div class="custom-video-wrapper">
+                        ${thumbMarkup}
+                    </div>
+                    <div class="videoInfo">
+                        <div class="videoTitle">${vid.title}</div>
+                        <div><b>By:</b> <span onclick="event.stopPropagation(); viewProfile('${vid.uploader}')" style="color:#0033cc; cursor:pointer;">${vid.uploader}</span></div>
+                        <p style="margin:5px 0;">${vid.description || 'No description.'}</p>
+                        <div style="color: #666; font-size: 11px;">${vid.hashtags}</div>
+                        <div style="margin-top:5px; color:#444;">👍 ${vid.likes.length} | 👎 ${vid.dislikes.length} | 💬 ${vid.comments.length}</div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    const mainVid = document.getElementById('mainWatchVideo');
+    mainVid.addEventListener('timeupdate', () => {
+        if(mainVid.duration) {
+            const pct = (mainVid.currentTime / mainVid.duration) * 100;
+            document.getElementById('mainProgressFilled').style.width = `${pct}%`;
+            document.getElementById('mainTimeDisplay').innerText = `${formatTime(mainVid.currentTime)} / ${formatTime(mainVid.duration)}`;
+        }
+    });
+
+    function togglePlay(videoId, btnId) {
+        const vid = document.getElementById(videoId);
+        const btn = document.getElementById(btnId);
+        if (vid.paused) { vid.play(); btn.innerText = '❚❚'; } 
+        else { vid.pause(); btn.innerText = '▶'; }
+    }
+
+    function seekVideo(event, videoId) {
+        const vid = document.getElementById(videoId);
+        const bar = event.currentTarget;
+        const rect = bar.getBoundingClientRect();
+        const pos = (event.clientX - rect.left) / bar.clientWidth;
+        if(vid.duration) vid.currentTime = pos * vid.duration;
+    }
+
+    function toggleMute(videoId) { document.getElementById(videoId).muted ^= true; }
+
+    function toggleFullscreen(wrapperId) {
+        const wrapper = document.getElementById(wrapperId);
+        if (!document.fullscreenElement) wrapper.requestFullscreen().catch(err => alert(err.message));
+        else document.exitFullscreen();
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchVideos);
+
+    function hideAllViews() {
+        document.getElementById('homeView').style.display = 'none';
+        document.getElementById('watchView').style.display = 'none';
+        document.getElementById('profileView').style.display = 'none';
+    }
+
+    function showHome() {
+        activeVideoId = null;
+        hideAllViews();
+        document.getElementById('homeView').style.display = 'block';
+        fetchVideos();
+    }
+
+    function openWatchMode(videoId) {
+        activeVideoId = videoId;
+        const vid = allVideos.find(v => v.id === videoId);
+        if (!vid) return;
+
+        hideAllViews();
+        document.getElementById('watchView').style.display = 'block';
+
+        updateWatchView(vid);
+        renderRelatedSidebar(videoId);
+        window.scrollTo(0, 0);
+    }
+
+    function updateWatchView(vid) {
+        window.currentWatchUploader = vid.uploader;
+        const mainVidEl = document.getElementById('mainWatchVideo');
+        mainVidEl.src = vid.videoUrl;
+        document.getElementById('mainPlayBtn').innerText = '▶';
+        document.getElementById('watchVideoTitle').innerText = vid.title;
+        document.getElementById('watchUploaderLink').innerText = vid.uploader;
+        document.getElementById('watchDescription').innerText = vid.description || 'No description.';
+        document.getElementById('watchHashtags').innerText = vid.hashtags || '';
+        
+        const hasLiked = currentUser && vid.likes.includes(currentUser);
+        const hasDisliked = currentUser && vid.dislikes.includes(currentUser);
+        
+        document.getElementById('watchLikeBtn').style.fontWeight = hasLiked ? 'bold' : 'normal';
+        document.getElementById('watchDislikeBtn').style.fontWeight = hasDisliked ? 'bold' : 'normal';
+        document.getElementById('watchLikeCount').innerText = vid.likes.length;
+        document.getElementById('watchDislikeCount').innerText = vid.dislikes.length;
+
+        const subContainer = document.getElementById('watchSubContainer');
+        if (currentUser && currentUser !== vid.uploader) {
+            const isSubscribed = userSubscriptions.includes(vid.uploader);
+            subContainer.innerHTML = `<button onclick="toggleSubscribe('${vid.uploader}')">${isSubscribed ? 'Subscribed ✓' : 'Subscribe'}</button>`;
+        } else {
+            subContainer.innerHTML = '';
+        }
+
+        renderComments(vid.comments);
+    }
+
+    function renderComments(comments) {
+        const container = document.getElementById('commentsList');
+        container.innerHTML = '';
+        if (!comments || comments.length === 0) {
+            container.innerHTML = '<p style="color:#666;">No comments yet.</p>';
+            return;
+        }
+
+        comments.forEach(c => {
+            const cLiked = currentUser && c.likes.includes(currentUser);
+            const cDisliked = currentUser && c.dislikes.includes(currentUser);
+
+            let repliesHtml = '';
+            if (c.replies && c.replies.length > 0) {
+                c.replies.forEach(r => {
+                    const rLiked = currentUser && r.likes.includes(currentUser);
+                    const rDisliked = currentUser && r.dislikes.includes(currentUser);
+                    repliesHtml += `
+                        <div class="reply-box">
+                            <div><b>${r.username}</b>: ${r.text}</div>
+                            <div style="font-size:10px; margin-top:3px;">
+                                <button onclick="reactComment(${c.id}, 'like', ${r.id})">${rLiked ? '❤️' : '👍'} (${r.likes.length})</button>
+                                <button onclick="reactComment(${c.id}, 'dislike', ${r.id})">${rDisliked ? '💔' : '👎'} (${r.dislikes.length})</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            container.innerHTML += `
+                <div class="comment-box">
+                    <div><b>${c.username}</b>: ${c.text}</div>
+                    <div style="font-size:10px; margin-top:5px;">
+                        <button onclick="reactComment(${c.id}, 'like')">${cLiked ? '❤️' : '👍'} (${c.likes.length})</button>
+                        <button onclick="reactComment(${c.id}, 'dislike')">${cDisliked ? '💔' : '👎'} (${c.dislikes.length})</button>
+                        <button onclick="showReplyBox(${c.id})">Reply</button>
+                    </div>
+                    <div id="replyInput-${c.id}" style="display:none; margin-top:5px;">
+                        <input type="text" id="replyText-${c.id}" placeholder="Write a reply..." style="width:80%;">
+                        <button onclick="postReply(${c.id})">Send</button>
+                    </div>
+                    ${repliesHtml}
+                </div>
+            `;
+        });
+    }
+
+    function renderRelatedSidebar(currentId) {
+        const container = document.getElementById('relatedVideosContainer');
+        container.innerHTML = '';
+        const related = allVideos.filter(v => v.id !== currentId);
+        
+        related.forEach(vid => {
+            const thumbMarkup = vid.thumbnailUrl ? `<img src="${vid.thumbnailUrl}">` : `<video src="${vid.videoUrl}" preload="metadata"></video>`;
+            container.innerHTML += `
+                <div class="sidebarThumbCard" onclick="openWatchMode(${vid.id})">
+                    <div style="width: 80px; height: 60px; background:#000; flex-shrink:0; overflow:hidden;">${thumbMarkup}</div>
+                    <div style="font-size: 11px;">
+                        <div style="font-weight:bold; color:#0033cc; margin-bottom:3px;">${vid.title}</div>
+                        <div>${vid.uploader}</div>
+                        <div style="color:#666;">👍 ${vid.likes.length}</div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function shareVideo() {
+        navigator.clipboard.writeText(window.location.href);
+        alert('Video link copied to clipboard!');
+    }
+
+    function reactVideo(type) {
+        if (!currentUser) return alert('You must be logged in.');
+        fetch(`/api/${type}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: activeVideoId, username: currentUser })
+        }).then(res => res.json()).then(data => updateWatchView(data.video));
+    }
+
+    function postComment() {
+        if (!currentUser) return alert('You must be logged in to comment.');
+        const text = document.getElementById('newCommentText').value;
+        if (!text) return;
+
+        fetch('/api/comment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: activeVideoId, username: currentUser, text })
+        }).then(res => res.json()).then(data => {
+            document.getElementById('newCommentText').value = '';
+            updateWatchView(data.video);
+        });
+    }
+
+    function showReplyBox(commentId) {
+        if (!currentUser) return alert('You must be logged in to reply.');
+        const box = document.getElementById(`replyInput-${commentId}`);
+        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function postReply(commentId) {
+        const text = document.getElementById(`replyText-${commentId}`).value;
+        if (!text) return;
+
+        fetch('/api/comment/reply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: activeVideoId, commentId, username: currentUser, text })
+        }).then(res => res.json()).then(data => updateWatchView(data.video));
+    }
+
+    function reactComment(commentId, type, replyId = null) {
+        if (!currentUser) return alert('You must be logged in.');
+        fetch('/api/comment/react', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ videoId: activeVideoId, commentId, replyId, username: currentUser, type })
+        }).then(res => res.json()).then(data => updateWatchView(data.video));
+    }
+
+    function toggleSubscribe(channel) {
+        if (!currentUser) return alert('You must be logged in.');
+        fetch('/api/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscriber: currentUser, channel })
+        }).then(res => res.json()).then(data => {
+            userSubscriptions = data.subscriptions;
+            viewProfile(channel);
+        });
+    }
+
+    function openModal(id, mode = null) {
+        if (id === 'authDialog') {
+            document.getElementById('authTitle').innerText = mode === 'login' ? 'Log In' : 'Sign Up';
+            window.authMode = mode;
+        }
+        document.getElementById(id).style.display = 'block';
+    }
+    
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    document.getElementById('authForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = document.getElementById('authUsername').value;
+        const password = document.getElementById('authPassword').value;
+        const endpoint = window.authMode === 'login' ? '/api/login' : '/api/signup';
+
+        fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('authError').innerText = data.error;
+            } else {
+                if (window.authMode === 'signup') {
+                    alert('Sign up successful! Please log in.');
+                    openModal('authDialog', 'login');
+                } else {
+                    currentUser = data.username;
+                    document.getElementById('userStatus').innerHTML = `Logged in as <b>${data.username}</b>`;
+                    document.getElementById('uploadBtn').style.display = 'inline-block';
+                    document.getElementById('profileTab').style.display = 'inline-block';
+                    closeModal('authDialog');
+                    
+                    fetch(`/api/user/${currentUser}`)
+                        .then(r => r.json())
+                        .then(uData => {
+                            userSubscriptions = uData.subscriptions || [];
+                            fetchVideos();
+                        });
+                }
+            }
+        });
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('title', document.getElementById('videoTitleInput').value);
+        formData.append('description', document.getElementById('videoDescInput').value);
+        formData.append('hashtags', document.getElementById('videoTagsInput').value);
+        formData.append('uploader', currentUser);
+        formData.append('videoFile', document.getElementById('videoFileInput').files[0]);
+        
+        const thumbInput = document.getElementById('thumbnailFileInput').files[0];
+        if (thumbInput) formData.append('thumbnailFile', thumbInput);
+
+        document.getElementById('uploadStatus').innerText = 'Uploading video...';
+        
+        fetch('/api/upload', { method: 'POST', body: formData })
+            .then(res => res.json())
+            .then(() => {
+                closeModal('uploadDialog');
+                document.getElementById('uploadForm').reset();
+                document.getElementById('uploadStatus').innerText = '';
+                fetchVideos();
+            });
+    });
+
+    function openProfile() { viewProfile(currentUser); }
+
+    function viewProfile(username) {
+        fetch(`/api/user/${username}`)
+            .then(res => res.json())
+            .then(user => {
+                hideAllViews();
+                document.getElementById('profileView').style.display = 'block';
+
+                const bannerDiv = document.getElementById('channelBannerDiv');
+                if (user.bannerUrl) {
+                    bannerDiv.style.backgroundImage = `url('${user.bannerUrl}')`;
+                    bannerDiv.innerText = '';
+                } else {
+                    bannerDiv.style.backgroundImage = 'none';
+                    bannerDiv.innerText = user.username;
+                }
+
+                const avatarDiv = document.getElementById('channelAvatarDiv');
+                if (user.avatarUrl) {
+                    avatarDiv.style.backgroundImage = `url('${user.avatarUrl}')`;
+                    avatarDiv.innerText = '';
+                } else {
+                    avatarDiv.style.backgroundImage = 'none';
+                    avatarDiv.innerText = user.username.charAt(0).toUpperCase();
+                }
+
+                document.getElementById('profUsernameTitle').innerText = user.username;
+                document.getElementById('profBioDisplay').innerText = user.bio || 'No bio provided.';
+                
+                const userVids = allVideos.filter(v => v.uploader === user.username);
+                document.getElementById('profVideoCount').innerText = `${userVids.length} videos`;
+                document.getElementById('profSubCount').innerText = `${user.subscribersCount || 0} subscribers`;
+
+                const actionDiv = document.getElementById('profileActionButton');
+                const editSection = document.getElementById('editBioSection');
+
+                if (currentUser === user.username) {
+                    editSection.style.display = 'block';
+                    document.getElementById('profBioInput').value = user.bio === 'Welcome to my JabberrTube channel!' ? '' : user.bio;
+                    actionDiv.innerHTML = '';
+                } else {
+                    editSection.style.display = 'none';
+                    if (currentUser) {
+                        const isSubbed = userSubscriptions.includes(user.username);
+                        actionDiv.innerHTML = `<button onclick="toggleSubscribe('${user.username}')">${isSubbed ? 'Subscribed ✓' : 'Subscribe'}</button>`;
+                    } else {
+                        actionDiv.innerHTML = '';
+                    }
+                }
+
+                const vContainer = document.getElementById('channelVideosContainer');
+                vContainer.innerHTML = '';
+                if (userVids.length === 0) {
+                    vContainer.innerHTML = '<p style="color:#666;">This user has not uploaded any videos yet.</p>';
+                } else {
+                    userVids.forEach(vid => {
+                        const thumbMarkup = vid.thumbnailUrl ? `<img src="${vid.thumbnailUrl}">` : `<video src="${vid.videoUrl}" preload="metadata"></video>`;
+                        vContainer.innerHTML += `
+                            <div class="videoCard" onclick="openWatchMode(${vid.id})">
+                                <div class="custom-video-wrapper">${thumbMarkup}</div>
+                                <div class="videoInfo">
+                                    <div class="videoTitle">${vid.title}</div>
+                                    <p style="margin:5px 0;">${vid.description || 'No description.'}</p>
+                                    <div style="color: #666; font-size: 11px;">${vid.hashtags}</div>
+                                    <div style="margin-top:5px; color:#444;">👍 ${vid.likes.length} | 👎 ${vid.dislikes.length} | 💬 ${vid.comments.length}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                window.scrollTo(0, 0);
+            });
+    }
+
+    function saveProfile() {
+        const formData = new FormData();
+        formData.append('username', currentUser);
+        formData.append('bio', document.getElementById('profBioInput').value);
+
+        const avatarFile = document.getElementById('profAvatarInput').files[0];
+        const bannerFile = document.getElementById('profBannerInput').files[0];
+        if (avatarFile) formData.append('avatar', avatarFile);
+        if (bannerFile) formData.append('banner', bannerFile);
+
+        fetch('/api/user/profile', {
+            method: 'POST',
+            body: formData
+        }).then(() => {
+            alert('Channel profile updated!');
+            viewProfile(currentUser);
+        });
+    }
+</script>
+</body>
+</html>
