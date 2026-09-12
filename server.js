@@ -21,7 +21,6 @@ if (fs.existsSync('./serviceAccountKey.json')) {
         scopes: ['https://www.googleapis.com/auth/drive']
     });
 } else {
-    // Fallback if key is provided via environment variables if needed later
     auth = new google.auth.GoogleAuth({
         credentials: JSON.parse(process.env.FIREBASE_CONFIG || '{}'),
         scopes: ['https://www.googleapis.com/auth/drive']
@@ -44,7 +43,6 @@ async function getDriveData(fileName) {
             const fileContent = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'json' });
             return fileContent.data || [];
         } else {
-            // File doesn't exist yet, create an empty one
             await saveDriveData(fileName, []);
             return [];
         }
@@ -69,14 +67,13 @@ async function saveDriveData(fileName, data) {
         };
 
         if (res.data.files.length > 0) {
-            // Update existing file
             const fileId = res.data.files[0].id;
             await drive.files.update({
                 fileId: fileId,
                 media: media,
             });
+            console.log(`Successfully updated ${fileName} in Google Drive.`);
         } else {
-            // Create new file
             const fileMetadata = {
                 name: fileName,
                 parents: [FOLDER_ID],
@@ -86,9 +83,10 @@ async function saveDriveData(fileName, data) {
                 media: media,
                 fields: 'id',
             });
+            console.log(`Successfully created ${fileName} in Google Drive.`);
         }
     } catch (err) {
-        console.error(`Error saving ${fileName} to Drive:`, err.message);
+        console.error(`CRITICAL DRIVE SAVE ERROR for ${fileName}:`, err.message);
     }
 }
 
@@ -116,7 +114,7 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- API ENDPOINTS (Google Drive JSON Storage) ---
+// --- API ENDPOINTS ---
 
 app.get('/api/videos', async (req, res) => {
     try {
