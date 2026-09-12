@@ -10,15 +10,15 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Initialize Firebase Admin using the Render Environment Variable or local fallback
+// Initialize Firebase Admin safely with environment variable parsing
 try {
     let serviceAccount;
     if (process.env.FIREBASE_CONFIG) {
-        // Parse the environment variable string for Render
-        serviceAccount = JSON.parse(process.env.FIREBASE_CONFIG);
-        console.log('Loaded serviceAccountKey from FIREBASE_CONFIG env variable.');
+        // Clean up any formatting issues from Render's UI paste
+        let rawConfig = process.env.FIREBASE_CONFIG.trim();
+        serviceAccount = JSON.parse(rawConfig);
+        console.log('Successfully parsed FIREBASE_CONFIG env variable.');
     } else {
-        // Fallback for local testing if file exists
         serviceAccount = require('./serviceAccountKey.json');
         console.log('Loaded serviceAccountKey from local file.');
     }
@@ -29,6 +29,7 @@ try {
     console.log('Connected to Firebase Firestore successfully!');
 } catch (err) {
     console.error('Critical Firebase Auth Error:', err.message);
+    process.exit(1);
 }
 
 const db = admin.firestore();
