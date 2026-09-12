@@ -10,11 +10,14 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Connect to MongoDB Atlas
+// Connect to MongoDB Atlas with timeout protection for cloud deployment
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://stupidnoobplays905_db_user:2Nc6NwNaBugmHhfv@jabbertube-data.ndozr3q.mongodb.net/jabberrtube?retryWrites=true&w=majority';
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('Connected to MongoDB Atlas successfully!'))
-    .catch(err => console.error('MongoDB connection error:', err));
+
+mongoose.connect(MONGO_URI, {
+    serverSelectionTimeoutMS: 10000 // Prevents indefinite hanging if IP is blocked
+})
+.then(() => console.log('Connected to MongoDB Atlas successfully!'))
+.catch(err => console.error('MongoDB connection error:', err));
 
 // Schemas & Models
 const userSchema = new mongoose.Schema({
